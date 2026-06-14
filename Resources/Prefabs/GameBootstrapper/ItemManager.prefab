@@ -46,5 +46,5 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   eraserCount: 3
   magicWandCount: 2
-  timeFreezerCount: 1
-  isSelectingArrow: 0
+  timeFreezeCount: 1
+  currentItem: 0

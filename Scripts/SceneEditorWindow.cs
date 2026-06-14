@@ -1,4 +1,6 @@
 using UnityEngine;
+
+#if UNITY_EDITOR
 using UnityEditor;
 using System.Collections.Generic;
 using System.IO;
@@ -245,3 +247,4 @@ public class ArrowData
     public Direction direction;
     public List<Vector2> positions = new List<Vector2>();
 }
+#endif

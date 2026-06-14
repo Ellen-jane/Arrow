@@ -78,9 +78,12 @@ public class SaveManager : MonoBehaviour
 
     private void UpdateSaveDataFromManagers()
     {
-        currentSaveData.eraserCount = ItemManager.Instance.eraserCount;
-        currentSaveData.magicWandCount = ItemManager.Instance.magicWandCount;
-        currentSaveData.timeFreezeCount = ItemManager.Instance.timeFreezeCount;
+        if (ItemManager.Instance != null)
+        {
+            currentSaveData.eraserCount = ItemManager.Instance.eraserCount;
+            currentSaveData.magicWandCount = ItemManager.Instance.magicWandCount;
+            currentSaveData.timeFreezeCount = ItemManager.Instance.timeFreezeCount;
+        }
 
         currentSaveData.soundEnabled = PlayerPrefs.GetInt("SoundEnabled", 1) == 1;
         currentSaveData.musicEnabled = PlayerPrefs.GetInt("MusicEnabled", 1) == 1;

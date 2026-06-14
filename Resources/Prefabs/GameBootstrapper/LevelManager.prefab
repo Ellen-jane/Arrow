@@ -44,3 +44,23 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d9ee1bc7924d9d047bbb79de002988e1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  defaultLevel: 3
+  autoStartOnStart: 1
+  currentConfig:
+    level: 3
+    health: 3
+    timeLimitSeconds: 480
+    arrowMoveSpeed: 10
+    gridSize: 0.5
+    playArea:
+      serializedVersion: 2
+      x: -6.5
+      y: -5
+      width: 13
+      height: 10
+    arrowCount: 72
+    minArrowLength: 2
+    maxArrowLength: 16
+    eraserCount: 3
+    magicWandCount: 2
+    timeFreezeCount: 1

@@ -14,32 +14,44 @@ public class SettingsPanel : MonoBehaviour
     {
         LoadSettings();
 
-        soundToggle.onValueChanged.AddListener(OnSoundChanged);
-        musicToggle.onValueChanged.AddListener(OnMusicChanged);
-        vibrationToggle.onValueChanged.AddListener(OnVibrationChanged);
-        speedSlider.onValueChanged.AddListener(OnSpeedChanged);
-        closeButton.onClick.AddListener(ClosePanel);
+        if (soundToggle != null)
+            soundToggle.onValueChanged.AddListener(OnSoundChanged);
+        if (musicToggle != null)
+            musicToggle.onValueChanged.AddListener(OnMusicChanged);
+        if (vibrationToggle != null)
+            vibrationToggle.onValueChanged.AddListener(OnVibrationChanged);
+        if (speedSlider != null)
+            speedSlider.onValueChanged.AddListener(OnSpeedChanged);
+        if (closeButton != null)
+            closeButton.onClick.AddListener(ClosePanel);
     }
 
     private void LoadSettings()
     {
-        soundToggle.isOn = PlayerPrefs.GetInt("SoundEnabled", 1) == 1;
-        musicToggle.isOn = PlayerPrefs.GetInt("MusicEnabled", 1) == 1;
-        vibrationToggle.isOn = PlayerPrefs.GetInt("VibrationEnabled", 1) == 1;
-        speedSlider.value = PlayerPrefs.GetFloat("MoveSpeed", 5f);
-        UpdateSpeedText(speedSlider.value);
+        if (soundToggle != null)
+            soundToggle.isOn = PlayerPrefs.GetInt("SoundEnabled", 1) == 1;
+        if (musicToggle != null)
+            musicToggle.isOn = PlayerPrefs.GetInt("MusicEnabled", 1) == 1;
+        if (vibrationToggle != null)
+            vibrationToggle.isOn = PlayerPrefs.GetInt("VibrationEnabled", 1) == 1;
+        if (speedSlider != null)
+            speedSlider.value = PlayerPrefs.GetFloat("MoveSpeed", 5f);
+
+        UpdateSpeedText(speedSlider != null ? speedSlider.value : PlayerPrefs.GetFloat("MoveSpeed", 5f));
     }
 
     private void OnSoundChanged(bool enabled)
     {
         PlayerPrefs.SetInt("SoundEnabled", enabled ? 1 : 0);
-        AudioManager.Instance.SetSoundEnabled(enabled);
+        if (AudioManager.Instance != null)
+            AudioManager.Instance.SetSoundEnabled(enabled);
     }
 
     private void OnMusicChanged(bool enabled)
     {
         PlayerPrefs.SetInt("MusicEnabled", enabled ? 1 : 0);
-        AudioManager.Instance.SetMusicEnabled(enabled);
+        if (AudioManager.Instance != null)
+            AudioManager.Instance.SetMusicEnabled(enabled);
     }
 
     private void OnVibrationChanged(bool enabled)
@@ -50,13 +62,15 @@ public class SettingsPanel : MonoBehaviour
     private void OnSpeedChanged(float value)
     {
         PlayerPrefs.SetFloat("MoveSpeed", value);
-        GameManager.Instance.moveSpeed = value;
+        if (GameManager.Instance != null)
+            GameManager.Instance.moveSpeed = value;
         UpdateSpeedText(value);
     }
 
     private void UpdateSpeedText(float value)
     {
-        speedText.text = $"{value:F1}x";
+        if (speedText != null)
+            speedText.text = $"{value:F1}x";
     }
 
     public void ClosePanel()

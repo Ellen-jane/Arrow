@@ -1,6 +1,6 @@
 using UnityEngine;
+using UnityEngine.Serialization;
 using System.Collections.Generic;
-using System;
 
 public enum ItemType
 {
@@ -16,109 +16,146 @@ public class ItemManager : MonoBehaviour
 
     public int eraserCount = 3;
     public int magicWandCount = 2;
+
+    [FormerlySerializedAs("timeFreezerCount")]
     public int timeFreezeCount = 1;
 
-    public ItemType currentItem;
-    public bool isUsingEraser;
+    public ItemType currentItem = ItemType.None;
+
+    public bool IsEraserArmed => currentItem == ItemType.Eraser && eraserCount > 0;
 
     private void Awake()
     {
         if (Instance == null)
+        {
             Instance = this;
+        }
         else
+        {
             Destroy(gameObject);
+        }
+    }
+
+    public void ResetForLevel(LevelConfig config)
+    {
+        if (config == null)
+        {
+            return;
+        }
+
+        eraserCount = config.eraserCount;
+        magicWandCount = config.magicWandCount;
+        timeFreezeCount = config.timeFreezeCount;
+        currentItem = ItemType.None;
+        RefreshUI();
     }
 
     public void SelectItem(ItemType itemType)
     {
-        if (currentItem == itemType)
+        if (itemType == currentItem)
         {
-            currentItem = ItemType.None;
-            isUsingEraser = false;
+            CancelSelection();
+            return;
         }
-        else
-        {
-            currentItem = itemType;
 
-            if (itemType == ItemType.MagicWand)
-            {
+        switch (itemType)
+        {
+            case ItemType.Eraser:
+                currentItem = eraserCount > 0 ? ItemType.Eraser : ItemType.None;
+                RefreshUI();
+                break;
+            case ItemType.MagicWand:
                 UseMagicWand();
-            }
-            else if (itemType == ItemType.TimeFreeze)
-            {
+                break;
+            case ItemType.TimeFreeze:
                 UseTimeFreeze();
-            }
-            else if (itemType == ItemType.Eraser)
-            {
-                isUsingEraser = true;
-            }
+                break;
+            default:
+                CancelSelection();
+                break;
         }
+    }
 
-        UIManager.Instance.HighlightSelectedItem(currentItem);
-        UIManager.Instance.UpdateItemCounts();
+    public void CancelSelection()
+    {
+        currentItem = ItemType.None;
+        RefreshUI();
     }
 
     public void UseEraser(Arrow targetArrow)
     {
-        if (eraserCount <= 0) return;
-        if (targetArrow == null) return;
+        if (eraserCount <= 0 || targetArrow == null)
+        {
+            CancelSelection();
+            return;
+        }
 
         eraserCount--;
-        isUsingEraser = false;
         currentItem = ItemType.None;
-
         targetArrow.Erase();
+        RefreshUI();
 
-        UIManager.Instance.HighlightSelectedItem(currentItem);
-        UIManager.Instance.UpdateItemCounts();
-
-        AudioManager.Instance.PlayEraseSound();
+        if (AudioManager.Instance != null)
+        {
+            AudioManager.Instance.PlayEraseSound();
+        }
     }
 
     public void UseMagicWand()
     {
-        if (magicWandCount <= 0) return;
+        if (magicWandCount <= 0 || GameManager.Instance == null || GameManager.Instance.arrows.Count == 0)
+        {
+            CancelSelection();
+            return;
+        }
 
         magicWandCount--;
         currentItem = ItemType.None;
 
-        List<Arrow> arrows = new List<Arrow>(GameManager.Instance.arrows);
-        if (arrows.Count == 0) return;
+        List<Arrow> candidates = new List<Arrow>();
+        for (int i = 0; i < GameManager.Instance.arrows.Count; i++)
+        {
+            Arrow arrow = GameManager.Instance.arrows[i];
+            if (arrow != null && !arrow.isMoving && !arrow.isErasing)
+            {
+                candidates.Add(arrow);
+            }
+        }
 
-        int countToRemove = Mathf.Min(3, arrows.Count);
-        System.Random random = new System.Random();
-
+        int countToRemove = Mathf.Min(3, candidates.Count);
         for (int i = 0; i < countToRemove; i++)
         {
-            if (arrows.Count == 0) break;
-
-            int index = random.Next(arrows.Count);
-            Arrow arrowToRemove = arrows[index];
-            arrows.RemoveAt(index);
-
+            int index = Random.Range(0, candidates.Count);
+            Arrow arrowToRemove = candidates[index];
+            candidates.RemoveAt(index);
             GameManager.Instance.RemoveArrow(arrowToRemove);
         }
 
-        UIManager.Instance.HighlightSelectedItem(currentItem);
-        UIManager.Instance.UpdateItemCounts();
+        RefreshUI();
 
-        AudioManager.Instance.PlayMagicSound();
+        if (AudioManager.Instance != null)
+        {
+            AudioManager.Instance.PlayMagicSound();
+        }
     }
 
     public void UseTimeFreeze()
     {
-        if (timeFreezeCount <= 0) return;
+        if (timeFreezeCount <= 0 || GameManager.Instance == null)
+        {
+            CancelSelection();
+            return;
+        }
 
         timeFreezeCount--;
         currentItem = ItemType.None;
-
         GameManager.Instance.AddTime(60f);
-        GameManager.Instance.FreezeTime(5f);
+        RefreshUI();
 
-        UIManager.Instance.HighlightSelectedItem(currentItem);
-        UIManager.Instance.UpdateItemCounts();
-
-        AudioManager.Instance.PlayTimeFreezeSound();
+        if (AudioManager.Instance != null)
+        {
+            AudioManager.Instance.PlayTimeFreezeSound();
+        }
     }
 
     public void AddItem(ItemType itemType, int count = 1)
@@ -136,6 +173,15 @@ public class ItemManager : MonoBehaviour
                 break;
         }
 
-        UIManager.Instance.UpdateItemCounts();
+        RefreshUI();
+    }
+
+    private void RefreshUI()
+    {
+        if (UIManager.Instance != null)
+        {
+            UIManager.Instance.HighlightSelectedItem(currentItem);
+            UIManager.Instance.UpdateItemCounts();
+        }
     }
 }
