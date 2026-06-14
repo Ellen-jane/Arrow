@@ -44,8 +44,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0e673ad0cb3ed4f4bb87eab4e3147f91, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  soundSource: {fileID: 0}
+  musicSource: {fileID: 0}
   clickSound: {fileID: 0}
   moveSound: {fileID: 0}
-  hitSound: {fileID: 0}
-  itemSound: {fileID: 0}
+  bounceSound: {fileID: 0}
+  eraseSound: {fileID: 0}
+  magicSound: {fileID: 0}
+  timeFreezeSound: {fileID: 0}
   gameOverSound: {fileID: 0}
+  gameWinSound: {fileID: 0}

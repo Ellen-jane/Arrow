@@ -44,8 +44,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 48eec3ce79a9a6b41b8731effbea5b51, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  currentState: 0
-  maxTime: 480
-  currentTime: 0
-  maxHealth: 5
-  currentHealth: 0
+  currentLevel: 3
+  maxHealth: 3
+  totalTime: 480
+  moveSpeed: 10
+  arrowSize: 0.5
+  playArea:
+    serializedVersion: 2
+    x: -6.5
+    y: -5
+    width: 13
+    height: 10
+  autoStartWithoutLevelManager: 1

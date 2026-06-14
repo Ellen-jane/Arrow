@@ -8,237 +8,274 @@ public class ArrowGenerator : MonoBehaviour
     public GameObject arrowHeadPrefab;
     public GameObject arrowBodyPrefab;
 
-    public int minArrows = 10;
-    public int maxArrows = 20;
-    public int minLength = 3;
-    public int maxLength = 15;
-    public float gridSize = 1f;
+    public int targetArrowCount = 64;
+    public int minLength = 2;
+    public int maxLength = 14;
+    public float gridSize = 0.5f;
+    public Rect playArea = new Rect(-6.5f, -5f, 13f, 10f);
+    public int maxAttemptsPerArrow = 300;
 
-    public Rect playArea;
-
-    private HashSet<Vector2> occupiedPositions = new HashSet<Vector2>();
+    private readonly HashSet<Vector2> occupiedPositions = new HashSet<Vector2>();
+    private readonly List<Vector2> gridCells = new List<Vector2>();
     private System.Random random;
-    private Camera mainCamera;
 
     private void Awake()
     {
         if (Instance == null)
+        {
             Instance = this;
+        }
         else
+        {
             Destroy(gameObject);
+        }
 
         random = new System.Random();
-        mainCamera = Camera.main;
-
-        if (playArea == new Rect(0, 0, 0, 0))
-        {
-            SetPlayAreaFromCamera();
-        }
     }
 
     private void Start()
     {
-        Invoke("DelayedGenerate", 0.1f);
+        if (GameManager.Instance != null && GameManager.Instance.arrows.Count == 0)
+        {
+            GenerateArrows();
+        }
     }
 
-    private void DelayedGenerate()
+    public void Configure(LevelConfig config)
     {
-        if (GameManager.Instance == null)
+        if (config == null)
         {
-            Debug.LogError("GameManager.Instance is null!");
             return;
         }
-        GenerateArrows();
-    }
 
-    private void SetPlayAreaFromCamera()
-    {
-        if (mainCamera != null)
-        {
-            float cameraDistance = Mathf.Abs(mainCamera.transform.position.z);
-
-            Vector2 bottomLeft = mainCamera.ScreenToWorldPoint(new Vector3(0, 0, cameraDistance));
-            Vector2 topRight = mainCamera.ScreenToWorldPoint(new Vector3(Screen.width, Screen.height, cameraDistance));
-
-            float padding = gridSize * 2f;
-            playArea = new Rect(
-                bottomLeft.x + padding,
-                bottomLeft.y + padding,
-                topRight.x - bottomLeft.x - padding * 2,
-                topRight.y - bottomLeft.y - padding * 2
-            );
-        }
-        else
-        {
-            playArea = new Rect(-8, -4, 16, 8);
-        }
+        targetArrowCount = config.arrowCount;
+        minLength = config.minArrowLength;
+        maxLength = config.maxArrowLength;
+        gridSize = config.gridSize;
+        playArea = config.playArea;
     }
 
     public void GenerateArrows()
     {
-        if (GameManager.Instance == null) return;
+        if (GameManager.Instance == null)
+        {
+            Debug.LogError("GameManager.Instance is null. Cannot generate arrows.");
+            return;
+        }
 
         occupiedPositions.Clear();
-        int arrowCount = random.Next(minArrows, maxArrows + 1);
+        BuildGridCells();
 
-        for (int i = 0; i < arrowCount; i++)
+        int created = 0;
+        int attempts = 0;
+        int maxAttempts = Mathf.Max(targetArrowCount * maxAttemptsPerArrow, maxAttemptsPerArrow);
+
+        while (created < targetArrowCount && attempts < maxAttempts)
         {
-            GenerateSingleArrow();
+            attempts++;
+            if (GenerateSingleArrow())
+            {
+                created++;
+            }
+        }
+
+        if (created < targetArrowCount)
+        {
+            Debug.LogWarning($"Generated {created}/{targetArrowCount} arrows. Try lowering density or arrow length if the board looks too sparse.");
+        }
+    }
+
+    private void BuildGridCells()
+    {
+        gridCells.Clear();
+
+        float xMin = Mathf.Ceil(playArea.xMin / gridSize) * gridSize;
+        float xMax = Mathf.Floor(playArea.xMax / gridSize) * gridSize;
+        float yMin = Mathf.Ceil(playArea.yMin / gridSize) * gridSize;
+        float yMax = Mathf.Floor(playArea.yMax / gridSize) * gridSize;
+
+        for (float x = xMin; x <= xMax; x += gridSize)
+        {
+            for (float y = yMin; y <= yMax; y += gridSize)
+            {
+                Vector2 cell = new Vector2(RoundToGrid(x), RoundToGrid(y));
+                if (IsInsidePlayArea(cell))
+                {
+                    gridCells.Add(cell);
+                }
+            }
         }
     }
 
     private bool GenerateSingleArrow()
     {
-        int attempts = 0;
-        const int maxAttempts = 100;
-
-        while (attempts < maxAttempts)
+        for (int attempt = 0; attempt < maxAttemptsPerArrow; attempt++)
         {
-            attempts++;
+            if (gridCells.Count == 0)
+            {
+                return false;
+            }
 
             Direction direction = (Direction)random.Next(4);
-            int length = random.Next(minLength, maxLength + 1);
+            int length = PickArrowLength();
+            Vector2 headPosition = gridCells[random.Next(gridCells.Count)];
 
-            Vector2 startPos = GetRandomStartPosition(direction);
-
-            if (!playArea.Contains(startPos)) continue;
-            if (!IsValidPosition(startPos)) continue;
-
-            List<Vector2> positions = GenerateArrowPath(startPos, direction, length);
-            if (positions != null && positions.Count >= minLength)
+            if (!IsCellAvailable(headPosition))
             {
-                CreateArrow(direction, positions);
-                MarkPositionsOccupied(positions);
-                return true;
+                continue;
             }
+
+            List<Vector2> positions = GenerateTrailingPath(headPosition, direction, length);
+            if (positions.Count < minLength)
+            {
+                continue;
+            }
+
+            CreateArrow(direction, positions);
+            MarkPositionsOccupied(positions);
+            return true;
         }
 
         return false;
     }
 
-    private Vector2 GetRandomStartPosition(Direction direction)
-    {
-        float x = 0, y = 0;
-
-        switch (direction)
-        {
-            case Direction.Up:
-                x = UnityEngine.Random.Range(playArea.xMin, playArea.xMax);
-                y = playArea.yMin;
-                break;
-            case Direction.Down:
-                x = UnityEngine.Random.Range(playArea.xMin, playArea.xMax);
-                y = playArea.yMax;
-                break;
-            case Direction.Left:
-                x = playArea.xMax;
-                y = UnityEngine.Random.Range(playArea.yMin, playArea.yMax);
-                break;
-            case Direction.Right:
-                x = playArea.xMin;
-                y = UnityEngine.Random.Range(playArea.yMin, playArea.yMax);
-                break;
-        }
-
-        return SnapToGrid(new Vector2(x, y));
-    }
-
-    private Vector2 SnapToGrid(Vector2 position)
-    {
-        return new Vector2(
-            Mathf.Round(position.x / gridSize) * gridSize,
-            Mathf.Round(position.y / gridSize) * gridSize
-        );
-    }
-
-    private bool IsValidPosition(Vector2 position)
-    {
-        if (!playArea.Contains(position)) return false;
-        if (occupiedPositions.Contains(position)) return false;
-        if (GameManager.Instance != null && GameManager.Instance.IsPositionOccupied(position)) return false;
-        return true;
-    }
-
-    private List<Vector2> GenerateArrowPath(Vector2 startPos, Direction direction, int length)
+    private List<Vector2> GenerateTrailingPath(Vector2 headPosition, Direction headDirection, int targetLength)
     {
         List<Vector2> positions = new List<Vector2>();
-        Vector2 currentPos = startPos;
-        Vector2 dirVector = GetDirectionVector(direction);
+        HashSet<Vector2> localPositions = new HashSet<Vector2>();
 
-        if (!IsValidPosition(currentPos)) return null;
+        positions.Add(headPosition);
+        localPositions.Add(headPosition);
 
-        positions.Add(currentPos);
+        Vector2 current = headPosition;
+        Direction travelDirection = Opposite(headDirection);
 
-        for (int i = 1; i < length; i++)
+        for (int i = 1; i < targetLength; i++)
         {
-            Vector2 nextPos = currentPos + dirVector * gridSize;
+            List<Direction> candidates = GetCandidateBodyDirections(travelDirection, i == 1);
+            bool added = false;
 
-            if (!IsValidPosition(nextPos))
+            for (int c = 0; c < candidates.Count; c++)
             {
-                Direction? newDir = TryChangeDirection(currentPos, direction);
-                if (newDir.HasValue)
+                Direction candidate = candidates[c];
+                Vector2 next = SnapToGrid(current + Arrow.GetDirectionVector(candidate) * gridSize);
+
+                if (!IsCellAvailable(next) || localPositions.Contains(next))
                 {
-                    dirVector = GetDirectionVector(newDir.Value);
-                    direction = newDir.Value;
-                    nextPos = currentPos + dirVector * gridSize;
+                    continue;
                 }
-                else
-                {
-                    break;
-                }
+
+                positions.Add(next);
+                localPositions.Add(next);
+                current = next;
+                travelDirection = candidate;
+                added = true;
+                break;
             }
 
-            if (!IsValidPosition(nextPos)) break;
-
-            positions.Add(nextPos);
-            currentPos = nextPos;
+            if (!added)
+            {
+                break;
+            }
         }
 
         return positions;
     }
 
-    private Vector2 GetDirectionVector(Direction dir)
+    private int PickArrowLength()
     {
-        switch (dir)
+        if (maxLength <= minLength)
         {
-            case Direction.Up: return Vector2.up;
-            case Direction.Down: return Vector2.down;
-            case Direction.Left: return Vector2.left;
-            case Direction.Right: return Vector2.right;
-            default: return Vector2.right;
+            return minLength;
+        }
+
+        bool makeLongArrow = random.NextDouble() < 0.25d;
+        if (makeLongArrow)
+        {
+            int longMin = Mathf.Max(minLength, Mathf.FloorToInt(maxLength * 0.55f));
+            return random.Next(longMin, maxLength + 1);
+        }
+
+        int shortMax = Mathf.Min(maxLength, minLength + 5);
+        return random.Next(minLength, shortMax + 1);
+    }
+
+    private List<Direction> GetCandidateBodyDirections(Direction travelDirection, bool firstBodySegment)
+    {
+        List<Direction> candidates = new List<Direction>();
+
+        if (firstBodySegment)
+        {
+            candidates.Add(travelDirection);
+            return candidates;
+        }
+
+        candidates.Add(Direction.Up);
+        candidates.Add(Direction.Down);
+        candidates.Add(Direction.Left);
+        candidates.Add(Direction.Right);
+
+        Direction blockedBacktrack = Opposite(travelDirection);
+        candidates.Remove(blockedBacktrack);
+        Shuffle(candidates);
+
+        if (candidates.Remove(travelDirection))
+        {
+            candidates.Insert(0, travelDirection);
+        }
+
+        return candidates;
+    }
+
+    private void Shuffle(List<Direction> directions)
+    {
+        for (int i = directions.Count - 1; i > 0; i--)
+        {
+            int j = random.Next(i + 1);
+            Direction temp = directions[i];
+            directions[i] = directions[j];
+            directions[j] = temp;
         }
     }
 
-    private Direction? TryChangeDirection(Vector2 currentPos, Direction currentDir)
+    private Direction Opposite(Direction direction)
     {
-        List<Direction> possibleDirs = new List<Direction>();
-
-        foreach (Direction dir in System.Enum.GetValues(typeof(Direction)))
+        switch (direction)
         {
-            if (dir == currentDir) continue;
-            if (IsOppositeDirection(dir, currentDir)) continue;
-
-            Vector2 nextPos = currentPos + GetDirectionVector(dir) * gridSize;
-            if (IsValidPosition(nextPos))
-            {
-                possibleDirs.Add(dir);
-            }
+            case Direction.Up:
+                return Direction.Down;
+            case Direction.Down:
+                return Direction.Up;
+            case Direction.Left:
+                return Direction.Right;
+            case Direction.Right:
+                return Direction.Left;
+            default:
+                return Direction.Left;
         }
-
-        if (possibleDirs.Count > 0)
-        {
-            return possibleDirs[random.Next(possibleDirs.Count)];
-        }
-
-        return null;
     }
 
-    private bool IsOppositeDirection(Direction dir1, Direction dir2)
+    private bool IsCellAvailable(Vector2 position)
     {
-        return (dir1 == Direction.Up && dir2 == Direction.Down) ||
-               (dir1 == Direction.Down && dir2 == Direction.Up) ||
-               (dir1 == Direction.Left && dir2 == Direction.Right) ||
-               (dir1 == Direction.Right && dir2 == Direction.Left);
+        return IsInsidePlayArea(position) && !occupiedPositions.Contains(position);
+    }
+
+    private bool IsInsidePlayArea(Vector2 position)
+    {
+        return position.x >= playArea.xMin &&
+               position.x <= playArea.xMax &&
+               position.y >= playArea.yMin &&
+               position.y <= playArea.yMax;
+    }
+
+    private Vector2 SnapToGrid(Vector2 position)
+    {
+        return new Vector2(RoundToGrid(position.x), RoundToGrid(position.y));
+    }
+
+    private float RoundToGrid(float value)
+    {
+        return Mathf.Round(value / gridSize) * gridSize;
     }
 
     private void CreateArrow(Direction direction, List<Vector2> positions)
@@ -246,32 +283,28 @@ public class ArrowGenerator : MonoBehaviour
         GameObject arrowObj = new GameObject($"Arrow_{direction}_{positions.Count}");
         Arrow arrow = arrowObj.AddComponent<Arrow>();
 
-        string headPrefabName = $"ArrowHead{direction}";
-        string bodyPrefabName = $"ArrowBody{direction}";
+        GameObject headPrefab = Resources.Load<GameObject>($"Prefabs/ArrowHead{direction}");
+        GameObject bodyPrefab = Resources.Load<GameObject>($"Prefabs/ArrowBody{direction}");
 
-        GameObject headPrefab = Resources.Load<GameObject>($"Prefabs/{headPrefabName}");
-        GameObject bodyPrefab = Resources.Load<GameObject>($"Prefabs/{bodyPrefabName}");
+        if (headPrefab == null)
+        {
+            headPrefab = arrowHeadPrefab;
+        }
 
-        if (headPrefab == null) headPrefab = arrowHeadPrefab;
-        if (bodyPrefab == null) bodyPrefab = arrowBodyPrefab;
+        if (bodyPrefab == null)
+        {
+            bodyPrefab = arrowBodyPrefab;
+        }
 
         arrow.Initialize(direction, positions, headPrefab, bodyPrefab);
-
-        BoxCollider2D collider = arrowObj.AddComponent<BoxCollider2D>();
-        collider.isTrigger = true;
     }
 
     private void MarkPositionsOccupied(List<Vector2> positions)
     {
-        foreach (var pos in positions)
+        for (int i = 0; i < positions.Count; i++)
         {
-            occupiedPositions.Add(pos);
+            occupiedPositions.Add(positions[i]);
         }
-    }
-
-    public void ClearOccupiedPosition(Vector2 position)
-    {
-        occupiedPositions.Remove(position);
     }
 
     public void ClearAllPositions()
@@ -281,18 +314,15 @@ public class ArrowGenerator : MonoBehaviour
 
     private void OnDrawGizmos()
     {
-        if (playArea != new Rect(0, 0, 0, 0))
-        {
-            Gizmos.color = Color.blue;
-            Gizmos.DrawWireCube(playArea.center, playArea.size);
+        Gizmos.color = Color.blue;
+        Gizmos.DrawWireCube(playArea.center, playArea.size);
 
-            Gizmos.color = Color.gray;
-            for (float x = playArea.xMin; x <= playArea.xMax; x += gridSize)
+        Gizmos.color = new Color(0.5f, 0.5f, 0.5f, 0.35f);
+        for (float x = playArea.xMin; x <= playArea.xMax; x += gridSize)
+        {
+            for (float y = playArea.yMin; y <= playArea.yMax; y += gridSize)
             {
-                for (float y = playArea.yMin; y <= playArea.yMax; y += gridSize)
-                {
-                    Gizmos.DrawWireSphere(new Vector3(x, y, 0), 0.05f);
-                }
+                Gizmos.DrawWireSphere(new Vector3(x, y, 0), 0.035f);
             }
         }
     }
